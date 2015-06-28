@@ -17,6 +17,25 @@ def write(node_urls,
     if success_count < write_consistency:
        raise Exception('Only wrote to {0} nodes'.format(success_count))
 
+def resolve(things):
+    non_nones = [ t for t in things if t is not None ]
+    return max(non_nones, key=attrgetter('timestamp'))
+
+def read_repair(node_urls,
+                replication_factor,
+                id):
+    things = [] 
+    for u in node_urls[:replication_factor]:
+        try:
+            things.append(node.get_thing(u, id))
+        except:
+            things.append(None) 
+    thing = resolve(things)
+    for idx, t in enumerate(things):
+        # see if it's broken, and if it is fix it
+        if t is None or t.value != thing.value:
+            node.put_thing(node_urls[idx], thing)    
+
 def read(node_urls,
          replication_factor,
          read_consistency,
@@ -30,4 +49,5 @@ def read(node_urls,
                 pass
     if len(things) < read_consistency:
         raise Exception('Only read from {0} nodes'.format(len(things)))
-    return max(things, key=attrgetter('timestamp'))
+    read_repair(node_urls, replication_factor, id)
+    return resolve(things)
